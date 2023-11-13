@@ -86,14 +86,18 @@ module.exports = ({
     )
   }
 
+  let allowCrashReconnect = true
+
   /** @type {import("../../types").Consumer["connect"]} */
   const connect = async () => {
+    allowCrashReconnect = true
     await cluster.connect()
     instrumentationEmitter.emit(CONNECT)
   }
 
   /** @type {import("../../types").Consumer["disconnect"]} */
-  const disconnect = async () => {
+  const disconnect = async (lAllowCrashReconnect = false) => {
+    allowCrashReconnect = lAllowCrashReconnect
     try {
       await stop()
       logger.debug('consumer has stopped, disconnecting', { groupId })
@@ -254,7 +258,7 @@ module.exports = ({
         cluster.removeBroker({ host: e.host, port: e.port })
       }
 
-      await disconnect()
+      await disconnect(allowCrashReconnect)
 
       const getOriginalCause = error => {
         if (error.cause) {
@@ -267,6 +271,7 @@ module.exports = ({
       const isErrorRetriable =
         e.name === 'KafkaJSNumberOfRetriesExceeded' || getOriginalCause(e).retriable === true
       const shouldRestart =
+        allowCrashReconnect &&  
         isErrorRetriable &&
         (!retry ||
           !retry.restartOnFailure ||
